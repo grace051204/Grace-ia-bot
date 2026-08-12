@@ -72,7 +72,7 @@ def webhook():
     send_message(
         chat_id,
         f"⚠️ Erreur technique : {str(e)[:1000]}"
-    )
+          )
     return "OK"
 
 
