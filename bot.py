@@ -67,13 +67,12 @@ def webhook():
 
         send_message(chat_id, answer)
 
-    except Exception as e:
-        print("Erreur :", e)
-        send_message(
-            chat_id,
-            "Désolé, une erreur s'est produite. Réessaie."
-        )
-
+        except Exception as e:
+    print("ERREUR OPENAI :", repr(e))
+    send_message(
+        chat_id,
+        f"⚠️ Erreur technique : {str(e)[:1000]}"
+    )
     return "OK"
 
 
