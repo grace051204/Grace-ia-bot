@@ -1,57 +1,82 @@
 import os
+from flask import Flask, request
 from openai import OpenAI
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+import requests
 
-# Les clés seront ajoutées plus tard dans Render.
+app = Flask(__name__)
+
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Bonjour ! Je suis Grace IA 🤖\n\n"
-        "Pose-moi ta question et je ferai de mon mieux pour t'aider."
+
+def send_message(chat_id, text):
+    requests.post(
+        f"{TELEGRAM_API}/sendMessage",
+        json={
+            "chat_id": chat_id,
+            "text": text
+        },
+        timeout=30
     )
 
 
-async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message.text
+@app.route("/", methods=["GET"])
+def home():
+    return "Grace IA est en ligne 🤖"
+
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(silent=True)
+
+    if not data or "message" not in data:
+        return "OK"
+
+    message = data["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
+
+    if text == "/start":
+        send_message(
+            chat_id,
+            "👋 Bonjour ! Je suis Grace IA 🤖\n\n"
+            "Pose-moi ta question."
+        )
+        return "OK"
+
+    if not text:
+        return "OK"
 
     try:
         response = client.responses.create(
             model="gpt-5-mini",
             instructions=(
                 "Tu es Grace IA, un assistant intelligent, "
-                "amical, clair et utile. Réponds en français sauf "
-                "si l'utilisateur demande une autre langue."
+                "amical, clair et utile. "
+                "Réponds en français sauf si l'utilisateur "
+                "demande une autre langue."
             ),
-            input=message
+            input=text
         )
 
         answer = response.output_text
 
-        await update.message.reply_text(answer)
+        send_message(chat_id, answer)
 
-    except Exception:
-        await update.message.reply_text(
-            "Désolé, une erreur s'est produite. Réessaie dans quelques instants."
+    except Exception as e:
+        print("Erreur :", e)
+        send_message(
+            chat_id,
+            "Désolé, une erreur s'est produite. Réessaie."
         )
 
-
-def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, chat)
-    )
-
-    print("Grace IA est démarré !")
-    app.run_polling()
+    return "OK"
 
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
